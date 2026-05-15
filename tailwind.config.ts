@@ -19,8 +19,8 @@ export default {
 		},
 		extend: {
 			fontFamily: {
-				russo: ['Russo One', 'sans-serif'],
-				golos: ['Golos Text', 'sans-serif'],
+				oswald: ['Oswald', 'sans-serif'],
+				rubik:  ['Rubik', 'sans-serif'],
 			},
 			colors: {
 				border: 'hsl(var(--border))',
