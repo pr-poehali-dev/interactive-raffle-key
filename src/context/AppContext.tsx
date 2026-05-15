@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { authApi, userApi, getToken, setToken, clearToken } from '@/lib/api';
 
 export interface ToastItem {
   id: number;
@@ -8,6 +9,7 @@ export interface ToastItem {
 }
 
 export interface User {
+  id: number;
   name: string;
   email: string;
   balance: number;
@@ -15,17 +17,20 @@ export interface User {
   referralIncome: number;
   level: number;
   isVip: boolean;
+  isAdmin: boolean;
+  referralCode: string;
 }
 
 interface AppContextType {
   user: User | null;
   isLoggedIn: boolean;
-  login: (email: string, password: string) => void;
-  register: (name: string, email: string, password: string) => void;
-  logout: () => void;
-  addBalance: (amount: number) => void;
-  deductBalance: (amount: number) => boolean;
-  addWinning: (amount: number) => void;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+  openDoor: (doorName: string, keyPrice: number, minPrize: number, maxPrize: number) => Promise<number | null>;
+  deposit: (amount: number) => Promise<boolean>;
 
   showAuth: boolean;
   authMode: 'login' | 'register';
@@ -42,21 +47,11 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | null>(null);
-
-const DEMO_USER: User = {
-  name: 'Алексей К.',
-  email: 'alex@example.com',
-  balance: 1250,
-  totalWon: 24370,
-  referralIncome: 3840,
-  level: 14,
-  isVip: true,
-};
-
 let toastId = 0;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [showDeposit, setShowDeposit] = useState(false);
@@ -65,48 +60,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toast = useCallback((type: ToastItem['type'], message: string, emoji?: string) => {
     const id = ++toastId;
     setToasts(p => [...p, { id, type, message, emoji }]);
-    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3800);
   }, []);
 
   const removeToast = useCallback((id: number) => {
     setToasts(p => p.filter(t => t.id !== id));
   }, []);
 
-  const login = useCallback((email: string, _password: string) => {
-    setUser({ ...DEMO_USER, email });
+  // Восстановление сессии при загрузке
+  useEffect(() => {
+    const tok = getToken();
+    if (!tok) { setIsLoading(false); return; }
+    authApi.me().then(data => {
+      if (data?.user) setUser(data.user);
+      else clearToken();
+    }).catch(() => clearToken()).finally(() => setIsLoading(false));
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const data = await authApi.me();
+    if (data?.user) setUser(data.user);
+  }, []);
+
+  const login = useCallback(async (email: string, password: string) => {
+    const data = await authApi.login(email, password);
+    if (data.error) throw new Error(data.error);
+    setToken(data.token);
+    setUser(data.user);
     setShowAuth(false);
-    toast('success', 'Добро пожаловать назад!', '👋');
+    toast('success', `Добро пожаловать, ${data.user.name.split(' ')[0]}!`, '👋');
   }, [toast]);
 
-  const register = useCallback((name: string, email: string, _password: string) => {
-    setUser({ ...DEMO_USER, name, email, balance: 100, totalWon: 0, referralIncome: 0, level: 1, isVip: false });
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    const data = await authApi.register(name, email, password);
+    if (data.error) throw new Error(data.error);
+    setToken(data.token);
+    setUser(data.user);
     setShowAuth(false);
-    toast('success', 'Аккаунт создан! Бонус 100₽ зачислен 🎁', '🎉');
+    toast('success', 'Аккаунт создан! На баланс зачислено ₽100 🎁', '🎉');
   }, [toast]);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    await authApi.logout();
+    clearToken();
     setUser(null);
     toast('info', 'Вы вышли из аккаунта', '👋');
   }, [toast]);
 
-  const addBalance = useCallback((amount: number) => {
-    setUser(p => p ? { ...p, balance: p.balance + amount } : p);
-    toast('success', `Баланс пополнен на ₽${amount.toLocaleString()}`, '💰');
-    setShowDeposit(false);
-  }, [toast]);
-
-  const deductBalance = useCallback((amount: number): boolean => {
-    if (!user || user.balance < amount) {
-      toast('error', 'Недостаточно средств на балансе', '❌');
+  const deposit = useCallback(async (amount: number): Promise<boolean> => {
+    const data = await userApi.deposit(amount);
+    if (data.error) {
+      toast('error', data.error, '❌');
       return false;
     }
-    setUser(p => p ? { ...p, balance: p.balance - amount } : p);
+    setUser(p => p ? { ...p, balance: data.balance } : p);
+    toast('success', `Баланс пополнен на ₽${amount.toLocaleString()}`, '💰');
+    setShowDeposit(false);
     return true;
-  }, [user, toast]);
+  }, [toast]);
 
-  const addWinning = useCallback((amount: number) => {
-    setUser(p => p ? { ...p, balance: p.balance + amount, totalWon: p.totalWon + amount } : p);
-  }, []);
+  const openDoor = useCallback(async (doorName: string, keyPrice: number, minPrize: number, maxPrize: number): Promise<number | null> => {
+    if (!user) return null;
+    if (user.balance < keyPrice) {
+      toast('error', 'Недостаточно средств на балансе', '❌');
+      return null;
+    }
+    const data = await userApi.openDoor(doorName, keyPrice, minPrize, maxPrize);
+    if (data.error) {
+      toast('error', data.error, '❌');
+      return null;
+    }
+    setUser(p => p ? { ...p, balance: data.balance, totalWon: data.totalWon } : p);
+    return data.prize;
+  }, [user, toast]);
 
   const openAuth = useCallback((mode: 'login' | 'register' = 'login') => {
     setAuthMode(mode);
@@ -114,17 +140,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const closeAuth = useCallback(() => setShowAuth(false), []);
+
   const openDeposit = useCallback(() => {
     if (!user) { openAuth('login'); return; }
     setShowDeposit(true);
   }, [user, openAuth]);
+
   const closeDeposit = useCallback(() => setShowDeposit(false), []);
 
   return (
     <AppContext.Provider value={{
-      user, isLoggedIn: !!user,
-      login, register, logout,
-      addBalance, deductBalance, addWinning,
+      user, isLoggedIn: !!user, isLoading,
+      login, register, logout, refreshUser,
+      openDoor, deposit,
       showAuth, authMode, openAuth, closeAuth,
       showDeposit, openDeposit, closeDeposit,
       toasts, toast, removeToast,

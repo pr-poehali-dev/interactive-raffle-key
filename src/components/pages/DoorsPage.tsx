@@ -32,25 +32,22 @@ const doorsData: Door[] = [
 ];
 
 export default function DoorsPage() {
-  const { user, isLoggedIn, openDeposit, openAuth, deductBalance, addWinning, toast } = useApp();
+  const { user, isLoggedIn, openDeposit, openAuth, openDoor, toast } = useApp();
   const [doors, setDoors] = useState<Door[]>(doorsData);
   const [openingId, setOpeningId] = useState<number | null>(null);
   const [buyDoor, setBuyDoor] = useState<Door | null>(null);
   const [winData, setWinData] = useState<{ prize: number; door: Door } | null>(null);
 
-  const handleBuyConfirm = (door: Door) => {
-    const ok = deductBalance(door.keyPrice);
-    if (!ok) return;
+  const handleBuyConfirm = async (door: Door) => {
     setBuyDoor(null);
     setOpeningId(door.id);
     toast('info', `Открываем ${door.name.toLowerCase()} дверь...`, door.emoji);
-    setTimeout(() => {
-      const prize = Math.floor(Math.random() * (door.maxPrize - door.minPrize) + door.minPrize);
-      addWinning(prize);
+    const prize = await openDoor(door.name, door.keyPrice, door.minPrize, door.maxPrize);
+    setOpeningId(null);
+    if (prize !== null) {
       setDoors(prev => prev.map(d => d.id === door.id ? { ...d, status: 'opened', prize } : d));
-      setOpeningId(null);
       setWinData({ prize, door });
-    }, 1800);
+    }
   };
 
   const handleCardClick = (door: Door) => {

@@ -1,0 +1,34 @@
+CREATE TABLE t_p80681349_interactive_raffle_k.users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  balance INTEGER NOT NULL DEFAULT 0,
+  total_won INTEGER NOT NULL DEFAULT 0,
+  referral_income INTEGER NOT NULL DEFAULT 0,
+  level INTEGER NOT NULL DEFAULT 1,
+  is_vip BOOLEAN NOT NULL DEFAULT FALSE,
+  is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+  referral_code VARCHAR(32) UNIQUE,
+  referred_by INTEGER,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE t_p80681349_interactive_raffle_k.sessions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  token VARCHAR(128) UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE t_p80681349_interactive_raffle_k.transactions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  type VARCHAR(32) NOT NULL,
+  amount INTEGER NOT NULL,
+  description VARCHAR(255),
+  door_name VARCHAR(64),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

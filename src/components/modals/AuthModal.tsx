@@ -8,18 +8,23 @@ export default function AuthModal() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!showAuth) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
-      if (authMode === 'login') login(email, password);
-      else register(name, email, password);
-      setLoading(false);
+    setError('');
+    try {
+      if (authMode === 'login') await login(email, password);
+      else await register(name, email, password);
       setEmail(''); setPassword(''); setName('');
-    }, 800);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Ошибка. Попробуйте снова');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -89,6 +94,12 @@ export default function AuthModal() {
               <p className="text-xs text-gray-500 leading-relaxed">
                 При регистрации на баланс зачисляется бесплатный бонус <span className="text-[#FFD700]">₽100</span> на первое открытие
               </p>
+            </div>
+          )}
+
+          {error && (
+            <div className="px-4 py-3 rounded-xl text-sm text-red-300 border border-red-500/25 bg-red-500/8">
+              ❌ {error}
             </div>
           )}
 

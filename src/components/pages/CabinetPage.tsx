@@ -1,18 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '@/context/AppContext';
+import { userApi } from '@/lib/api';
 import { Page } from '@/pages/Index';
 import Icon from '@/components/ui/icon';
 
-const historyItems = [
-  { id: 1, type: 'win',      door: 'Золотая дверь',      amount: 8500,   sign: '+', date: '15.05.2026 14:22', emoji: '🥇', color: '#FFD700' },
-  { id: 2, type: 'deposit',  door: 'Пополнение',          amount: 5000,   sign: '+', date: '15.05.2026 12:10', emoji: '💳', color: '#00F5A0' },
-  { id: 3, type: 'key',      door: 'Серебряная дверь',    amount: 1000,   sign: '−', date: '14.05.2026 20:44', emoji: '🔑', color: '#9B5DE5' },
-  { id: 4, type: 'win',      door: 'Серебряная дверь',    amount: 2200,   sign: '+', date: '14.05.2026 20:44', emoji: '🥈', color: '#C0C0C0' },
-  { id: 5, type: 'key',      door: 'Железная дверь',      amount: 500,    sign: '−', date: '13.05.2026 11:05', emoji: '🔑', color: '#9B5DE5' },
-  { id: 6, type: 'win',      door: 'Железная дверь',      amount: 1850,   sign: '+', date: '13.05.2026 11:05', emoji: '🔩', color: '#9CA3AF' },
-  { id: 7, type: 'referral', door: 'Реферальный бонус',   amount: 320,    sign: '+', date: '12.05.2026 16:30', emoji: '🌳', color: '#00F5A0' },
-  { id: 8, type: 'withdraw', door: 'Вывод средств',        amount: 10000,  sign: '−', date: '10.05.2026 09:00', emoji: '📤', color: '#FF6B00' },
-];
+interface Transaction {
+  id: number;
+  type: string;
+  amount: number;
+  description: string;
+  doorName?: string;
+  createdAt: string;
+}
+
+const TX_META: Record<string, { emoji: string; color: string; sign: string }> = {
+  win:      { emoji: '🏆', color: '#FFD700', sign: '+' },
+  deposit:  { emoji: '💳', color: '#00F5A0', sign: '+' },
+  key:      { emoji: '🔑', color: '#9B5DE5', sign: '−' },
+  referral: { emoji: '🌳', color: '#00F5A0', sign: '+' },
+  withdraw: { emoji: '📤', color: '#FF6B00', sign: '−' },
+  admin:    { emoji: '🛡️', color: '#FF006E', sign: '' },
+  bonus:    { emoji: '🎁', color: '#00F5A0', sign: '+' },
+};
 
 interface Props {
   onNavigate: (page: Page) => void;
@@ -21,6 +30,17 @@ interface Props {
 export default function CabinetPage({ onNavigate }: Props) {
   const { user, isLoggedIn, openAuth, openDeposit, logout } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'history' | 'payment'>('overview');
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'history' && isLoggedIn) {
+      setTxLoading(true);
+      userApi.transactions().then(data => {
+        if (data.transactions) setTransactions(data.transactions);
+      }).finally(() => setTxLoading(false));
+    }
+  }, [activeTab, isLoggedIn]);
 
   if (!isLoggedIn) {
     return (
@@ -73,7 +93,16 @@ export default function CabinetPage({ onNavigate }: Props) {
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {user!.isAdmin && (
+              <button
+                onClick={() => onNavigate('admin')}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold hover:scale-105 transition-transform"
+                style={{ background: 'rgba(255,0,110,0.15)', border: '1px solid rgba(255,0,110,0.3)', color: '#FF006E' }}
+              >
+                🛡️ Админ
+              </button>
+            )}
             <button
               onClick={openDeposit}
               className="btn-gold flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm"
@@ -186,27 +215,38 @@ export default function CabinetPage({ onNavigate }: Props) {
             <div className="p-5 border-b border-white/5">
               <h3 className="font-oswald text-lg font-semibold text-white tracking-wide">История операций</h3>
             </div>
-            <div className="divide-y divide-white/5">
-              {historyItems.map(item => (
-                <div key={item.id} className="flex items-center gap-4 p-4 hover:bg-white/2 transition-colors">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
-                    style={{ background: `${item.color}14` }}
-                  >
-                    {item.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white">{item.door}</div>
-                    <div className="text-xs text-gray-500">{item.date}</div>
-                  </div>
-                  <div
-                    className={`font-oswald text-base font-semibold ${item.sign === '+' ? 'text-green-400' : 'text-red-400'}`}
-                  >
-                    {item.sign}₽{item.amount.toLocaleString()}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {txLoading ? (
+              <div className="p-10 flex justify-center">
+                <div className="w-7 h-7 border-2 border-[#FFD700] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : transactions.length === 0 ? (
+              <div className="p-10 text-center text-gray-500 text-sm">Операций пока нет</div>
+            ) : (
+              <div className="divide-y divide-white/5">
+                {transactions.map(tx => {
+                  const meta = TX_META[tx.type] || { emoji: '💫', color: '#9B5DE5', sign: '' };
+                  const date = new Date(tx.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  const isPositive = tx.amount > 0;
+                  return (
+                    <div key={tx.id} className="flex items-center gap-4 p-4 hover:bg-white/2 transition-colors">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+                        style={{ background: `${meta.color}14` }}
+                      >
+                        {meta.emoji}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-white">{tx.description || tx.doorName || tx.type}</div>
+                        <div className="text-xs text-gray-500">{date}</div>
+                      </div>
+                      <div className={`font-oswald text-base font-semibold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                        {isPositive ? '+' : ''}₽{Math.abs(tx.amount).toLocaleString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

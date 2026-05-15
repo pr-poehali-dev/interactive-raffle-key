@@ -5,7 +5,7 @@ import Icon from '@/components/ui/icon';
 const QUICK_AMOUNTS = [500, 1000, 2500, 5000, 10000];
 
 export default function DepositModal() {
-  const { showDeposit, closeDeposit, addBalance } = useApp();
+  const { showDeposit, closeDeposit, deposit } = useApp();
   const [tab, setTab] = useState<'card' | 'qr'>('card');
   const [amount, setAmount] = useState('');
   const [card, setCard] = useState('');
@@ -18,17 +18,14 @@ export default function DepositModal() {
     return digits.replace(/(.{4})/g, '$1 ').trim();
   };
 
-  const handlePay = (e: React.FormEvent) => {
+  const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
     const num = parseInt(amount);
     if (!num || num < 100) return;
     setLoading(true);
-    setTimeout(() => {
-      addBalance(num);
-      setLoading(false);
-      setAmount('');
-      setCard('');
-    }, 1200);
+    const ok = await deposit(num);
+    setLoading(false);
+    if (ok) { setAmount(''); setCard(''); }
   };
 
   return (
@@ -125,7 +122,7 @@ export default function DepositModal() {
                 onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.1)'; }}
               />
               <button
-                onClick={() => { if (amount && parseInt(amount) >= 100) { setLoading(true); setTimeout(() => { addBalance(parseInt(amount)); setLoading(false); }, 800); } }}
+                onClick={async () => { if (amount && parseInt(amount) >= 100) { setLoading(true); await deposit(parseInt(amount)); setLoading(false); } }}
                 className="btn-gold w-full py-4 rounded-xl text-base"
               >
                 {loading ? 'Генерируем QR...' : '📱 Сгенерировать QR-код'}

@@ -102,6 +102,15 @@ export default function Navigation({ currentPage, onNavigate }: Props) {
                     >
                       <span>💳</span> Пополнить баланс
                     </button>
+                    {user?.isAdmin && (
+                      <button
+                        onClick={() => { onNavigate('admin'); setUserMenuOpen(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-red-500/5 transition-colors"
+                        style={{ color: '#FF006E' }}
+                      >
+                        <span>🛡️</span> Панель администратора
+                      </button>
+                    )}
                     <div className="my-1 h-px mx-3" style={{ background: 'rgba(255,255,255,0.07)' }} />
                     <button
                       onClick={() => { logout(); setUserMenuOpen(false); }}
